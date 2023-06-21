@@ -1,0 +1,187 @@
+// C++ code
+/* 
+Tomas Blanco Rivas
+1J
+Segundo Parcial - Sistema de Incendio
+*/
+#include <Servo.h>
+#include <LiquidCrystal.h>
+#include <IRremote.h>
+
+#define SERVO 9
+#define SENSOR_TEMP A0
+#define LED_ROJO 12
+#define LED_VERDE 13
+#define CONTROL_PIN 11
+
+unsigned long codigo;
+int veranoMin = 25;
+int veranoMax = 49;
+int primaveraMin = 20;
+int primaveraMax = 24;
+int otonioMin = 15;
+int otonioMax = 19;
+int inviernoMin = -40;
+int inviernoMax = 14;
+int temperatura;
+int temperaturaAnterior = 1;
+int temperaturaMax = 50;
+char lcdLine0[17];
+char lcdLine1[17];
+bool sistemaEncendido = false;
+
+Servo servoMotor;
+LiquidCrystal miLcd(2,3,4,5,6,7);
+IRrecv irrecv(CONTROL_PIN);
+
+bool ActivarYApagarSistema(unsigned long codigo, 
+                           bool sistemaEncendido);
+int ObtenerTemperatura(int sensor, int temperatura);
+char* ObtenerEstacion(int temperatura);
+int MostrarTemperatura(int temperatura, int temperaturaAnterior,
+                       char* estacion);
+void ActivarServo(int temperatura, int temperaturaMax);
+
+void EncenderYApagarLed(int ledEncendido, int ledApagado);
+void RestablecerValores(int ledUno, int ledDos);
+
+void setup()
+{
+  servoMotor.attach(SERVO);
+  servoMotor.write(0);
+  Serial.begin(9600);
+  miLcd.begin(16,2);
+  irrecv.enableIRIn(); // comienza la recepcioón de datos
+  pinMode(LED_ROJO, OUTPUT);
+  pinMode(LED_VERDE, OUTPUT);
+}
+
+void loop()
+{
+  if(irrecv.decode()) // verifica si recibe señal infrarroja
+  {
+    codigo = irrecv.decodedIRData.decodedRawData;
+
+    sistemaEncendido = ActivarYApagarSistema(codigo, sistemaEncendido);
+    irrecv.resume(); //reanuda la recepción de señales
+  }
+  if(sistemaEncendido)
+  {
+    // Calcular temperatura
+    temperatura = ObtenerTemperatura(SENSOR_TEMP, temperatura);
+    
+    // Calcular estacion
+    char* estacion = ObtenerEstacion(temperatura);
+      
+    // Display lcd
+    temperaturaAnterior = MostrarTemperatura(temperatura,temperaturaAnterior, estacion);
+    // Mover Servo  
+    ActivarServo(temperatura, temperaturaMax);
+  }
+  else
+  {
+	RestablecerValores(LED_ROJO, LED_VERDE);
+  }
+}
+
+bool ActivarYApagarSistema(unsigned long codigo, 
+                           bool sistemaEncendido)
+{
+  if (codigo == 0xEF10BF00)
+  {
+    if(!sistemaEncendido)
+    {
+      Serial.println("ACTIVAR SISTEMA DE INCENDIO");
+      sistemaEncendido = true;
+    }
+  }
+  else if (codigo == 0xEE11BF00)
+  {
+    Serial.println("APAGAR SISTEMA DE INCENDIO");
+    sistemaEncendido = false;
+  }
+  return sistemaEncendido;
+}
+
+int ObtenerTemperatura(int sensor, int temperatura)
+{
+  int lecturaSensor = analogRead(sensor);
+  temperatura = map(lecturaSensor, 20, 358, -40, 125);
+  
+  return temperatura;
+}
+
+char* ObtenerEstacion(int temperatura)
+{
+  if(temperatura >= veranoMin && temperatura <= veranoMax)
+  {
+    return "Verano";
+  }
+  else if(temperatura >= otonioMin && temperatura <= otonioMax)
+  {
+    return "Otonio";
+  }
+  else if(temperatura >= inviernoMin && temperatura <= inviernoMax)
+  {
+    return "Invierno";
+  }
+  else if(temperatura >= primaveraMin && temperatura <= primaveraMax)
+  {
+    return "Primavera";
+  }
+}
+
+int MostrarTemperatura(int temperatura, int temperaturaAnterior,
+                       char* estacion)
+{
+  if(temperatura != temperaturaAnterior)
+  {
+    miLcd.clear();
+  }
+  
+  if (temperatura >= temperaturaMax)
+  {
+    miLcd.setCursor(0, 1);
+    miLcd.print("ALERTA: INCENDIO");
+    EncenderYApagarLed(LED_ROJO, LED_VERDE);
+  }
+  else
+  {
+    EncenderYApagarLed(LED_VERDE, LED_ROJO);
+  	miLcd.setCursor(0, 0);
+  	sprintf(lcdLine0, "Est: %s", estacion);
+  	miLcd.print(lcdLine0);
+  
+  	miLcd.setCursor(0, 1);// ubica el cursor en columna 0 y fila 1
+  	sprintf(lcdLine1, "Temp: %dC'",temperatura);
+  	miLcd.print(lcdLine1);
+  }
+  temperaturaAnterior = temperatura;
+  return temperaturaAnterior;
+}
+
+void ActivarServo(int temperatura, int temperaturaMax)
+{
+  if(temperatura >= temperaturaMax)
+  {
+    servoMotor.write(90);
+  }
+  else
+  {
+    servoMotor.write(0);
+  }
+}
+
+void EncenderYApagarLed(int ledEncendido, int ledApagado)
+{
+  digitalWrite(ledEncendido, HIGH);
+  digitalWrite(ledApagado, LOW);
+}
+
+void RestablecerValores(int ledUno, int ledDos)
+{
+  miLcd.clear();
+  servoMotor.write(0);
+  digitalWrite(ledUno, LOW);
+  digitalWrite(ledDos, LOW);
+}
