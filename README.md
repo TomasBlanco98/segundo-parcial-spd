@@ -5,7 +5,7 @@
 ## Alumno
 * Blanco Rivas Tomas
 
-## Proyecto: Montacarga
+## Proyecto: Sistema de Incendio
 ![proyecto](img/SistemaDeIncendio.png)
 
 ## Descripción
